@@ -86,6 +86,7 @@ endButton.MouseButton1Click:Connect(function()
 	root.CFrame = CFrame.new(END_POS + Vector3.new(0,4,0))
 end)
 
+
 local autoButton = Instance.new("TextButton")
 autoButton.Size = UDim2.new(0, 140, 0, 40)
 autoButton.Position = UDim2.new(1, -150, 0, 45)
@@ -131,9 +132,9 @@ local function rebuildUI()
 
 	local list = {}
 
-	-- filter only spawners with child "Criminal ATM"
+	-- filter only spawners with child "CriminalAtm"
 	for _, sp in ipairs(TARGET_FOLDER:GetChildren()) do
-		if sp:IsA("BasePart") and sp:FindFirstChild("Criminal ATM") then
+		if sp:IsA("BasePart") and sp:FindFirstChild("CriminalAtm") then
 			table.insert(list, sp)
 			if not lastVisit[sp] then
 				lastVisit[sp] = 0
@@ -141,7 +142,7 @@ local function rebuildUI()
 		end
 	end
 
-	-- sort by "oldest visit"
+	-- sort by oldest visit
 	table.sort(list, function(a,b)
 		return lastVisit[a] < lastVisit[b]
 	end)
@@ -192,7 +193,7 @@ end
 task.spawn(function()
 	while true do
 		for _, sp in ipairs(TARGET_FOLDER:GetChildren()) do
-			if sp:IsA("BasePart") and sp:FindFirstChild("Criminal ATM") then
+			if sp:IsA("BasePart") and sp:FindFirstChild("CriminalAtm") then
 				local pos = root.Position
 				local center = sp.Position
 
@@ -216,12 +217,11 @@ end)
 task.spawn(function()
 	while true do
 		if autoEnabled then
-			-- find oldest visited spawner
 			local oldest = nil
 			local oldestTime = math.huge
 
 			for sp, t in pairs(lastVisit) do
-				if sp.Parent and sp:FindFirstChild("Criminal ATM") then
+				if sp.Parent and sp:FindFirstChild("CriminalAtm") then
 					if t < oldestTime then
 						oldest = sp
 						oldestTime = t
