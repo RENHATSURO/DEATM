@@ -1,0 +1,231 @@
+--[[
+GUI Criminal ATP Spawner Tracker
+Fait par ChatGPT → classement par "dernier visité"
+Draggable / Auto update / Téléportations
+]]
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
+
+-----------------------------------------------------------
+-- CONFIG
+-----------------------------------------------------------
+
+local TARGET_FOLDER = workspace:WaitForChild("Game")
+	:WaitForChild("Jobs")
+	:WaitForChild("CriminalATPSpawners")
+
+local RANGE = Vector3.new(15,15,15)  -- demi-taille du cube (= zone totale 30x30x30)
+local END_POSITION = Vector3.new(-2543.307861328125, 12.393211364746094, 4030.319091796875)
+
+-----------------------------------------------------------
+-- GUI CREATION
+-----------------------------------------------------------
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "CriminalATP_GUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 350, 0, 420)
+main.Position = UDim2.new(0, 40, 0.5, -200)
+main.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+main.BorderSizePixel = 0
+main.Parent = gui
+
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+-- DRAGGABLE
+local dragging = false
+local dragStart, startPos
+
+main.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = main.Position
+	end
+end)
+
+main.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+		                          startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,40)
+title.BackgroundTransparency = 1
+title.Text = "Criminal ATP Tracker"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Parent = main
+
+local endButton = Instance.new("TextButton")
+endButton.Size = UDim2.new(0, 120, 0, 40)
+endButton.Position = UDim2.new(0.5, -60, 0, 45)
+endButton.Text = "END"
+endButton.Font = Enum.Font.GothamBold
+endButton.TextScaled = true
+endButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+endButton.TextColor3 = Color3.fromRGB(255,255,255)
+endButton.BorderSizePixel = 0
+endButton.Parent = main
+
+Instance.new("UICorner", endButton).CornerRadius = UDim.new(0,10)
+
+endButton.MouseButton1Click:Connect(function()
+	root.CFrame = CFrame.new(END_POSITION + Vector3.new(0,3,0))
+end)
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -20, 1, -100)
+scroll.Position = UDim2.new(0, 10, 0, 90)
+scroll.BackgroundColor3 = Color3.fromRGB(45,45,45)
+scroll.ScrollBarThickness = 6
+scroll.BorderSizePixel = 0
+scroll.Parent = main
+
+Instance.new("UICorner", scroll).CornerRadius = UDim.new(0,10)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0,6)
+layout.Parent = scroll
+
+-----------------------------------------------------------
+-- SPANNER TRACKING
+-----------------------------------------------------------
+
+local lastVisit = {} -- [Spawner] = time()
+local spawners = {}  -- list of spawners
+
+local function updateSpawnerList()
+	spawners = TARGET_FOLDER:GetChildren()
+	for _, sp in ipairs(spawners) do
+		if not lastVisit[sp] then
+			lastVisit[sp] = 0
+		end
+	end
+end
+
+updateSpawnerList()
+
+-----------------------------------------------------------
+-- UI LIST BUILD
+-----------------------------------------------------------
+
+local entries = {} -- [Spawner] = Frame
+
+local function clearUI()
+	for _,frame in pairs(entries) do
+		frame:Destroy()
+	end
+	entries = {}
+end
+
+local function rebuildUI()
+	clearUI()
+	
+	-- sort by "longest time since visit"
+	table.sort(spawners, function(a,b)
+		return lastVisit[a] < lastVisit[b]
+	end)
+	
+	for _, sp in ipairs(spawners) do
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(1,0,0,45)
+		frame.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		frame.BorderSizePixel = 0
+		frame.Parent = scroll
+		Instance.new("UICorner", frame).CornerRadius = UDim.new(0,8)
+		
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(0.6,0,1,0)
+		label.BackgroundTransparency = 1
+		label.TextColor3 = Color3.new(1,1,1)
+		label.Font = Enum.Font.Gotham
+		label.TextScaled = true
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Text = sp.Name
+		label.Parent = frame
+		
+		local tp = Instance.new("TextButton")
+		tp.Size = UDim2.new(0.3,0,0.8,0)
+		tp.Position = UDim2.new(0.65,0,0.1,0)
+		tp.BackgroundColor3 = Color3.fromRGB(0,120,255)
+		tp.TextColor3 = Color3.new(1,1,1)
+		tp.Font = Enum.Font.GothamBold
+		tp.TextScaled = true
+		tp.Text = "TP"
+		tp.BorderSizePixel = 0
+		tp.Parent = frame
+		
+		Instance.new("UICorner", tp).CornerRadius = UDim.new(0,8)
+		
+		tp.MouseButton1Click:Connect(function()
+			if sp and sp:IsA("BasePart") and sp.Parent then
+				root.CFrame = sp.CFrame + Vector3.new(0,4,0)
+			end
+		end)
+		
+		entries[sp] = frame
+	end
+	
+	scroll.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 20)
+end
+
+-----------------------------------------------------------
+-- RANGE CHECKING LOOP
+-----------------------------------------------------------
+
+task.spawn(function()
+	while true do
+		for _, sp in ipairs(spawners) do
+			if sp:IsA("BasePart") then
+				local min = sp.Position - RANGE
+				local max = sp.Position + RANGE
+				local pos = root.Position
+				
+				local inside =
+					pos.X > min.X and pos.X < max.X and
+					pos.Y > min.Y and pos.Y < max.Y and
+					pos.Z > min.Z and pos.Z < max.Z
+				
+				if inside then
+					lastVisit[sp] = os.clock()
+				end
+			end
+		end
+		
+		rebuildUI()
+		task.wait(0.2)
+	end
+end)
+
+-----------------------------------------------------------
+-- AUTO-UPDATE ON ADD/REMOVE
+-----------------------------------------------------------
+
+TARGET_FOLDER.ChildAdded:Connect(function()
+	updateSpawnerList()
+	rebuildUI()
+end)
+
+TARGET_FOLDER.ChildRemoved:Connect(function()
+	updateSpawnerList()
+	rebuildUI()
+end)
+
+rebuildUI()
