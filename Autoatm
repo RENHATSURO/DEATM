@@ -1,5 +1,5 @@
 -------------------------------------------------------------
--- Criminal ATM Spawner GUI (Model support + Name filter)
+-- Criminal ATM Spawner GUI (No IsA checks / Fully generic)
 -------------------------------------------------------------
 
 local Players = game:GetService("Players")
@@ -14,18 +14,45 @@ local root = character:WaitForChild("HumanoidRootPart")
 -------------------------------------------------------------
 
 local TARGET_FOLDER = workspace:WaitForChild("Game")
-    :WaitForChild("Jobs")
-    :WaitForChild("CriminalATMSpawners")
+	:WaitForChild("Jobs")
+	:WaitForChild("CriminalATMSpawners")
 
 local RANGE = 15
 local END_POS = Vector3.new(-2543.307861328125, 12.393211364746094, 4030.319091796875)
 
-local lastVisit = {}  -- [model] = timestamp
+local lastVisit = {}
 local entries = {}
 local autoEnabled = false
 
 -------------------------------------------------------------
--- CREATE GUI
+-- UTILITY: Get teleport position regardless of object type
+-------------------------------------------------------------
+local function getPosition(obj)
+	-- If object has PrimaryPart
+	if obj.PrimaryPart then
+		return obj.PrimaryPart.Position
+	end
+
+	-- If it contains parts (Models, Folders, anything)
+	if obj.GetDescendants then
+		for _, child in ipairs(obj:GetDescendants()) do
+			if child:IsA("BasePart") then
+				return child.Position
+			end
+		end
+	end
+
+	-- If object itself is a BasePart
+	if obj:IsA("BasePart") then
+		return obj.Position
+	end
+
+	-- No usable position found
+	return nil
+end
+
+-------------------------------------------------------------
+-- GUI CREATION
 -------------------------------------------------------------
 
 local gui = Instance.new("ScreenGui")
@@ -37,9 +64,13 @@ gui.Parent = player:WaitForChild("PlayerGui")
 local main = Instance.new("Frame")
 main.Size = UDim2.new(0, 360, 0, 470)
 main.Position = UDim2.new(0, 40, 0.5, -235)
-main.BackgroundColor3 = Color3.fromRGB(35,35,35)
+main.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+-------------------------------------------------------------
+-- DRAGGING
+-------------------------------------------------------------
 
 local dragging, dragStart, startPos
 
@@ -60,8 +91,10 @@ end)
 UIS.InputChanged:Connect(function(i)
 	if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
 		local delta = i.Position - dragStart
-		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
-			startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		main.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y
+		)
 	end
 end)
 
@@ -115,8 +148,8 @@ Instance.new("UICorner", autoButton).CornerRadius = UDim.new(0,10)
 autoButton.MouseButton1Click:Connect(function()
 	autoEnabled = not autoEnabled
 	autoButton.Text = autoEnabled and "AUTO: ON" or "AUTO: OFF"
-	autoButton.BackgroundColor3 = autoEnabled and Color3.fromRGB(0,170,0)
-		or Color3.fromRGB(40,120,40)
+	autoButton.BackgroundColor3 =
+		autoEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(40,120,40)
 end)
 
 -------------------------------------------------------------
@@ -127,9 +160,9 @@ local scroll = Instance.new("ScrollingFrame")
 scroll.Size = UDim2.new(1, -20, 1, -110)
 scroll.Position = UDim2.new(0, 10, 0, 95)
 scroll.BackgroundColor3 = Color3.fromRGB(45,45,45)
-scroll.BorderSizePixel = 0
 scroll.ScrollBarThickness = 6
 scroll.Parent = main
+scroll.BorderSizePixel = 0
 Instance.new("UICorner", scroll).CornerRadius = UDim.new(0,10)
 
 local layout = Instance.new("UIListLayout")
@@ -137,12 +170,12 @@ layout.Padding = UDim.new(0,8)
 layout.Parent = scroll
 
 -------------------------------------------------------------
--- UI REBUILD
+-- UI BUILDING
 -------------------------------------------------------------
 
 local function clearUI()
-	for _, frame in pairs(entries) do
-		frame:Destroy()
+	for _, f in pairs(entries) do
+		f:Destroy()
 	end
 	entries = {}
 end
@@ -150,29 +183,21 @@ end
 local function rebuildUI()
 	clearUI()
 
-	local models = {}
+	local objs = {}
 
 	for _, item in ipairs(TARGET_FOLDER:GetChildren()) do
-		if item:IsA("Model") and item.Name == "CriminalATM" then
-
-			-- Ensure PrimaryPart exists
-			if not item.PrimaryPart then
-				local primary = item:FindFirstChildWhichIsA("BasePart")
-				if primary then item.PrimaryPart = primary end
-			end
-
-			if item.PrimaryPart then
-				table.insert(models, item)
-				lastVisit[item] = lastVisit[item] or 0
-			end
+		if item.Name == "CriminalATM" then
+			table.insert(objs, item)
+			lastVisit[item] = lastVisit[item] or 0
 		end
 	end
 
-	table.sort(models, function(a,b)
+	-- sort by oldest visit
+	table.sort(objs, function(a,b)
 		return lastVisit[a] < lastVisit[b]
 	end)
 
-	for _, model in ipairs(models) do
+	for _, item in ipairs(objs) do
 		local frame = Instance.new("Frame")
 		frame.Size = UDim2.new(1,0,0,46)
 		frame.BackgroundColor3 = Color3.fromRGB(60,60,60)
@@ -182,7 +207,7 @@ local function rebuildUI()
 		local label = Instance.new("TextLabel")
 		label.Size = UDim2.new(0.6,0,1,0)
 		label.BackgroundTransparency = 1
-		label.Text = model.Name
+		label.Text = item.Name
 		label.Font = Enum.Font.Gotham
 		label.TextScaled = true
 		label.TextColor3 = Color3.new(1,1,1)
@@ -200,36 +225,38 @@ local function rebuildUI()
 		Instance.new("UICorner", tp).CornerRadius = UDim.new(0,10)
 
 		tp.MouseButton1Click:Connect(function()
-			root.CFrame = model.PrimaryPart.CFrame + Vector3.new(0,4,0)
+			local pos = getPosition(item)
+			if pos then
+				root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
+			end
 		end)
 
-		entries[model] = frame
+		entries[item] = frame
 	end
 
 	scroll.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 20)
 end
 
 -------------------------------------------------------------
--- RANGE DETECTION LOOP
+-- RANGE TRACKER
 -------------------------------------------------------------
 
 task.spawn(function()
 	while true do
 		for _, item in ipairs(TARGET_FOLDER:GetChildren()) do
-			if item:IsA("Model")
-				and item.Name == "CriminalATM"
-				and item.PrimaryPart
-			then
-				local c = item.PrimaryPart.Position
-				local p = root.Position
+			if item.Name == "CriminalATM" then
+				local pos = getPosition(item)
+				if pos then
+					local p = root.Position
 
-				local inside =
-					math.abs(p.X - c.X) <= RANGE and
-					math.abs(p.Y - c.Y) <= RANGE and
-					math.abs(p.Z - c.Z) <= RANGE
+					local inside =
+						math.abs(p.X - pos.X) <= RANGE and
+						math.abs(p.Y - pos.Y) <= RANGE and
+						math.abs(p.Z - pos.Z) <= RANGE
 
-				if inside then
-					lastVisit[item] = os.clock()
+					if inside then
+						lastVisit[item] = os.clock()
+					end
 				end
 			end
 		end
@@ -240,25 +267,28 @@ task.spawn(function()
 end)
 
 -------------------------------------------------------------
--- AUTO-TP LOOP (23 sec)
+-- AUTO LOOP (23 sec)
 -------------------------------------------------------------
 
 task.spawn(function()
 	while true do
 		if autoEnabled then
-			local oldest, oldestTime = nil, math.huge
+			local oldest, time = nil, math.huge
 
-			for model, t in pairs(lastVisit) do
-				if model.Parent and model.PrimaryPart then
-					if t < oldestTime then
-						oldest = model
-						oldestTime = t
+			for obj, t in pairs(lastVisit) do
+				if obj.Parent then
+					if t < time then
+						oldest = obj
+						time = t
 					end
 				end
 			end
 
 			if oldest then
-				root.CFrame = oldest.PrimaryPart.CFrame + Vector3.new(0,4,0)
+				local pos = getPosition(oldest)
+				if pos then
+					root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
+				end
 			end
 		end
 
