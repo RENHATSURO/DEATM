@@ -1,10 +1,12 @@
 -------------------------------------------------
--- CriminalATM GUI - Structure STRICTE
+-- Criminal ATM GUI (VERSION SIMPLE & CLAIRE)
 -------------------------------------------------
 
+-- Services
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 
+-- Player
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local root = character:WaitForChild("HumanoidRootPart")
@@ -14,49 +16,26 @@ local root = character:WaitForChild("HumanoidRootPart")
 -------------------------------------------------
 
 local ATM_FOLDER =
-	workspace:WaitForChild("Game")
-	:WaitForChild("Jobs")
-	:WaitForChild("CriminalATMSpawners")
+    workspace:WaitForChild("Game")
+    :WaitForChild("Jobs")
+    :WaitForChild("CriminalATMSpawners")
 
-local RANGE = 15 -- cube 30x30x30
+local RANGE = 15 -- => cube 30x30x30
 local AUTO_DELAY = 23
 
 local END_POSITION = Vector3.new(
-	-2543.307861328125,
-	12.393211364746094,
-	4030.319091796875
+    -2543.307861328125,
+    12.393211364746094,
+    4030.319091796875
 )
 
 -------------------------------------------------
--- STATE
+-- DATA
 -------------------------------------------------
 
-local lastVisit = {} -- [Instance] = timestamp
+local lastVisit = {} -- [CriminalATMSpawner] = time
 local autoEnabled = false
-local entries = {}
-
--------------------------------------------------
--- UTILS
--------------------------------------------------
-
--- Trouve une position valide peu importe l'objet
-local function getAnyPosition(obj)
-	if obj.PrimaryPart then
-		return obj.PrimaryPart.Position
-	end
-
-	for _, d in ipairs(obj:GetDescendants()) do
-		if d:IsA("BasePart") then
-			return d.Position
-		end
-	end
-
-	if obj:IsA("BasePart") then
-		return obj.Position
-	end
-
-	return nil
-end
+local rows = {}
 
 -------------------------------------------------
 -- GUI
@@ -65,7 +44,6 @@ end
 local gui = Instance.new("ScreenGui")
 gui.Name = "CriminalATM_GUI"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
@@ -76,34 +54,41 @@ main.BorderSizePixel = 0
 main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
 
--- Drag
-local dragging, dragStart, startPos
+-------------------------------------------------
+-- DRAG
+-------------------------------------------------
 
-main.InputBegan:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true
-		dragStart = i.Position
-		startPos = main.Position
-	end
+local dragging = false
+local dragStart, startPos
+
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+    end
 end)
 
-main.InputEnded:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = false
-	end
+main.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
 end)
 
-UIS.InputChanged:Connect(function(i)
-	if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-		local delta = i.Position - dragStart
-		main.Position = UDim2.new(
-			startPos.X.Scale, startPos.X.Offset + delta.X,
-			startPos.Y.Scale, startPos.Y.Offset + delta.Y
-		)
-	end
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
 end)
 
--- Title
+-------------------------------------------------
+-- TITLE
+-------------------------------------------------
+
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1,0,0,40)
 title.BackgroundTransparency = 1
@@ -112,6 +97,10 @@ title.Font = Enum.Font.GothamBold
 title.TextScaled = true
 title.TextColor3 = Color3.new(1,1,1)
 title.Parent = main
+
+-------------------------------------------------
+-- BUTTONS
+-------------------------------------------------
 
 -- END
 local endBtn = Instance.new("TextButton")
@@ -126,7 +115,7 @@ endBtn.Parent = main
 Instance.new("UICorner", endBtn).CornerRadius = UDim.new(0,10)
 
 endBtn.MouseButton1Click:Connect(function()
-	root.CFrame = CFrame.new(END_POSITION + Vector3.new(0,4,0))
+    root.CFrame = CFrame.new(END_POSITION + Vector3.new(0,4,0))
 end)
 
 -- AUTO
@@ -137,24 +126,28 @@ autoBtn.Text = "AUTO: OFF"
 autoBtn.Font = Enum.Font.GothamBold
 autoBtn.TextScaled = true
 autoBtn.TextColor3 = Color3.new(1,1,1)
-autoBtn.BackgroundColor3 = Color3.fromRGB(40,120,40)
+autoBtn.BackgroundColor3 = Color3.fromRGB(80,80,80)
 autoBtn.Parent = main
 Instance.new("UICorner", autoBtn).CornerRadius = UDim.new(0,10)
 
 autoBtn.MouseButton1Click:Connect(function()
-	autoEnabled = not autoEnabled
-	autoBtn.Text = autoEnabled and "AUTO: ON" or "AUTO: OFF"
-	autoBtn.BackgroundColor3 = autoEnabled
-		and Color3.fromRGB(0,170,0)
-		or Color3.fromRGB(40,120,40)
+    autoEnabled = not autoEnabled
+    autoBtn.Text = autoEnabled and "AUTO: ON" or "AUTO: OFF"
+    autoBtn.BackgroundColor3 = autoEnabled
+        and Color3.fromRGB(0,170,0)
+        or Color3.fromRGB(80,80,80)
 end)
 
--- Scroll
+-------------------------------------------------
+-- LIST
+-------------------------------------------------
+
 local scroll = Instance.new("ScrollingFrame")
 scroll.Size = UDim2.new(1,-20,1,-110)
 scroll.Position = UDim2.new(0,10,0,95)
-scroll.BackgroundColor3 = Color3.fromRGB(45,45,45)
+scroll.CanvasSize = UDim2.new(0,0,0,0)
 scroll.ScrollBarThickness = 6
+scroll.BackgroundColor3 = Color3.fromRGB(45,45,45)
 scroll.BorderSizePixel = 0
 scroll.Parent = main
 Instance.new("UICorner", scroll).CornerRadius = UDim.new(0,10)
@@ -164,90 +157,88 @@ layout.Padding = UDim.new(0,8)
 layout.Parent = scroll
 
 -------------------------------------------------
--- UI BUILD
+-- BUILD LIST
 -------------------------------------------------
 
 local function rebuildUI()
-	for _, f in pairs(entries) do
-		f:Destroy()
-	end
-	entries = {}
+    for _, r in pairs(rows) do
+        r:Destroy()
+    end
+    rows = {}
 
-	local list = {}
+    local spawners = {}
 
-	for _, obj in ipairs(ATM_FOLDER:GetChildren()) do
-		if obj.Name == "CriminalATM" then
-			lastVisit[obj] = lastVisit[obj] or 0
-			table.insert(list, obj)
-		end
-	end
+    for _, spawner in ipairs(ATM_FOLDER:GetChildren()) do
+        if spawner.Name == "CriminalATMSpawner"
+        and spawner:FindFirstChild("CriminalATM") then
+            lastVisit[spawner] = lastVisit[spawner] or 0
+            table.insert(spawners, spawner)
+        end
+    end
 
-	table.sort(list, function(a,b)
-		return lastVisit[a] < lastVisit[b]
-	end)
+    table.sort(spawners, function(a,b)
+        return lastVisit[a] < lastVisit[b]
+    end)
 
-	for _, obj in ipairs(list) do
-		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1,0,0,46)
-		row.BackgroundColor3 = Color3.fromRGB(60,60,60)
-		row.Parent = scroll
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0,10)
+    for _, spawner in ipairs(spawners) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1,0,0,46)
+        row.BackgroundColor3 = Color3.fromRGB(60,60,60)
+        row.Parent = scroll
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0,10)
 
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.new(0.6,0,1,0)
-		label.BackgroundTransparency = 1
-		label.Text = "CriminalATM"
-		label.Font = Enum.Font.Gotham
-		label.TextScaled = true
-		label.TextColor3 = Color3.new(1,1,1)
-		label.Parent = row
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.6,0,1,0)
+        label.BackgroundTransparency = 1
+        label.Text = "CriminalATM"
+        label.Font = Enum.Font.Gotham
+        label.TextScaled = true
+        label.TextColor3 = Color3.new(1,1,1)
+        label.Parent = row
 
-		local tp = Instance.new("TextButton")
-		tp.Size = UDim2.new(0.3,0,0.8,0)
-		tp.Position = UDim2.new(0.65,0,0.1,0)
-		tp.Text = "TP"
-		tp.Font = Enum.Font.GothamBold
-		tp.TextScaled = true
-		tp.TextColor3 = Color3.new(1,1,1)
-		tp.BackgroundColor3 = Color3.fromRGB(0,120,255)
-		tp.Parent = row
-		Instance.new("UICorner", tp).CornerRadius = UDim.new(0,10)
+        local tp = Instance.new("TextButton")
+        tp.Size = UDim2.new(0.3,0,0.8,0)
+        tp.Position = UDim2.new(0.65,0,0.1,0)
+        tp.Text = "TP"
+        tp.Font = Enum.Font.GothamBold
+        tp.TextScaled = true
+        tp.TextColor3 = Color3.new(1,1,1)
+        tp.BackgroundColor3 = Color3.fromRGB(0,120,255)
+        tp.Parent = row
+        Instance.new("UICorner", tp).CornerRadius = UDim.new(0,10)
 
-		tp.MouseButton1Click:Connect(function()
-			local pos = getAnyPosition(obj)
-			if pos then
-				root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
-			end
-		end)
+        tp.MouseButton1Click:Connect(function()
+            root.CFrame = CFrame.new(spawner.Position + Vector3.new(0,4,0))
+        end)
 
-		entries[obj] = row
-	end
+        rows[spawner] = row
+    end
 
-	scroll.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 20)
+    scroll.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 10)
 end
 
 -------------------------------------------------
--- RANGE TRACKER
+-- RANGE TRACKING
 -------------------------------------------------
 
 task.spawn(function()
-	while true do
-		for _, obj in ipairs(ATM_FOLDER:GetChildren()) do
-			if obj.Name == "CriminalATM" then
-				local pos = getAnyPosition(obj)
-				if pos then
-					local p = root.Position
-					if math.abs(p.X-pos.X)<=RANGE
-					and math.abs(p.Y-pos.Y)<=RANGE
-					and math.abs(p.Z-pos.Z)<=RANGE then
-						lastVisit[obj] = os.clock()
-					end
-				end
-			end
-		end
-		rebuildUI()
-		task.wait(0.25)
-	end
+    while true do
+        for spawner, _ in pairs(lastVisit) do
+            if spawner.Parent then
+                local p = root.Position
+                local s = spawner.Position
+
+                if math.abs(p.X-s.X)<=RANGE
+                and math.abs(p.Y-s.Y)<=RANGE
+                and math.abs(p.Z-s.Z)<=RANGE then
+                    lastVisit[spawner] = os.clock()
+                end
+            end
+        end
+
+        rebuildUI()
+        task.wait(0.3)
+    end
 end)
 
 -------------------------------------------------
@@ -255,23 +246,22 @@ end)
 -------------------------------------------------
 
 task.spawn(function()
-	while true do
-		if autoEnabled then
-			local oldest, time = nil, math.huge
-			for obj, t in pairs(lastVisit) do
-				if obj.Parent and t < time then
-					oldest, time = obj, t
-				end
-			end
-			if oldest then
-				local pos = getAnyPosition(oldest)
-				if pos then
-					root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
-				end
-			end
-		end
-		task.wait(AUTO_DELAY)
-	end
+    while true do
+        if autoEnabled then
+            local oldest, time = nil, math.huge
+            for spawner, t in pairs(lastVisit) do
+                if spawner.Parent and t < time then
+                    oldest, time = spawner, t
+                end
+            end
+
+            if oldest then
+                root.CFrame = CFrame.new(oldest.Position + Vector3.new(0,4,0))
+            end
+        end
+
+        task.wait(AUTO_DELAY)
+    end
 end)
 
 rebuildUI()
