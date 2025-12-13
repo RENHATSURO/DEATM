@@ -1,6 +1,6 @@
--------------------------------------------------------------
--- Criminal ATM Spawner GUI (No IsA checks / Fully generic)
--------------------------------------------------------------
+-------------------------------------------------
+-- CriminalATM GUI - Structure STRICTE
+-------------------------------------------------
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -9,69 +9,74 @@ local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local root = character:WaitForChild("HumanoidRootPart")
 
--------------------------------------------------------------
+-------------------------------------------------
 -- CONFIG
--------------------------------------------------------------
+-------------------------------------------------
 
-local TARGET_FOLDER = workspace:WaitForChild("Game")
+local ATM_FOLDER =
+	workspace:WaitForChild("Game")
 	:WaitForChild("Jobs")
 	:WaitForChild("CriminalATMSpawners")
 
-local RANGE = 15
-local END_POS = Vector3.new(-2543.307861328125, 12.393211364746094, 4030.319091796875)
+local RANGE = 15 -- cube 30x30x30
+local AUTO_DELAY = 23
 
-local lastVisit = {}
-local entries = {}
+local END_POSITION = Vector3.new(
+	-2543.307861328125,
+	12.393211364746094,
+	4030.319091796875
+)
+
+-------------------------------------------------
+-- STATE
+-------------------------------------------------
+
+local lastVisit = {} -- [Instance] = timestamp
 local autoEnabled = false
+local entries = {}
 
--------------------------------------------------------------
--- UTILITY: Get teleport position regardless of object type
--------------------------------------------------------------
-local function getPosition(obj)
-	-- If object has PrimaryPart
+-------------------------------------------------
+-- UTILS
+-------------------------------------------------
+
+-- Trouve une position valide peu importe l'objet
+local function getAnyPosition(obj)
 	if obj.PrimaryPart then
 		return obj.PrimaryPart.Position
 	end
 
-	-- If it contains parts (Models, Folders, anything)
-	if obj.GetDescendants then
-		for _, child in ipairs(obj:GetDescendants()) do
-			if child:IsA("BasePart") then
-				return child.Position
-			end
+	for _, d in ipairs(obj:GetDescendants()) do
+		if d:IsA("BasePart") then
+			return d.Position
 		end
 	end
 
-	-- If object itself is a BasePart
 	if obj:IsA("BasePart") then
 		return obj.Position
 	end
 
-	-- No usable position found
 	return nil
 end
 
--------------------------------------------------------------
--- GUI CREATION
--------------------------------------------------------------
+-------------------------------------------------
+-- GUI
+-------------------------------------------------
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "ATM_GUI"
+gui.Name = "CriminalATM_GUI"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 360, 0, 470)
-main.Position = UDim2.new(0, 40, 0.5, -235)
-main.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+main.Size = UDim2.new(0, 360, 0, 460)
+main.Position = UDim2.new(0, 40, 0.5, -230)
+main.BackgroundColor3 = Color3.fromRGB(35,35,35)
+main.BorderSizePixel = 0
 main.Parent = gui
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
 
--------------------------------------------------------------
--- DRAGGING
--------------------------------------------------------------
-
+-- Drag
 local dragging, dragStart, startPos
 
 main.InputBegan:Connect(function(i)
@@ -98,120 +103,104 @@ UIS.InputChanged:Connect(function(i)
 	end
 end)
 
--------------------------------------------------------------
--- TITLE
--------------------------------------------------------------
-
+-- Title
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1,0,0,40)
-title.Text = "Criminal ATM Tracker"
 title.BackgroundTransparency = 1
+title.Text = "Criminal ATM Tracker"
 title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.new(1,1,1)
 title.TextScaled = true
+title.TextColor3 = Color3.new(1,1,1)
 title.Parent = main
 
--------------------------------------------------------------
--- END BUTTON
--------------------------------------------------------------
+-- END
+local endBtn = Instance.new("TextButton")
+endBtn.Size = UDim2.new(0,140,0,40)
+endBtn.Position = UDim2.new(0,10,0,45)
+endBtn.Text = "END"
+endBtn.Font = Enum.Font.GothamBold
+endBtn.TextScaled = true
+endBtn.TextColor3 = Color3.new(1,1,1)
+endBtn.BackgroundColor3 = Color3.fromRGB(180,40,40)
+endBtn.Parent = main
+Instance.new("UICorner", endBtn).CornerRadius = UDim.new(0,10)
 
-local endButton = Instance.new("TextButton")
-endButton.Size = UDim2.new(0, 140, 0, 40)
-endButton.Position = UDim2.new(0, 10, 0, 45)
-endButton.Text = "END"
-endButton.Font = Enum.Font.GothamBold
-endButton.TextScaled = true
-endButton.TextColor3 = Color3.new(1,1,1)
-endButton.BackgroundColor3 = Color3.fromRGB(180,40,40)
-endButton.Parent = main
-Instance.new("UICorner", endButton).CornerRadius = UDim.new(0,10)
-
-endButton.MouseButton1Click:Connect(function()
-	root.CFrame = CFrame.new(END_POS + Vector3.new(0,4,0))
+endBtn.MouseButton1Click:Connect(function()
+	root.CFrame = CFrame.new(END_POSITION + Vector3.new(0,4,0))
 end)
 
--------------------------------------------------------------
--- AUTO BUTTON
--------------------------------------------------------------
+-- AUTO
+local autoBtn = Instance.new("TextButton")
+autoBtn.Size = UDim2.new(0,140,0,40)
+autoBtn.Position = UDim2.new(1,-150,0,45)
+autoBtn.Text = "AUTO: OFF"
+autoBtn.Font = Enum.Font.GothamBold
+autoBtn.TextScaled = true
+autoBtn.TextColor3 = Color3.new(1,1,1)
+autoBtn.BackgroundColor3 = Color3.fromRGB(40,120,40)
+autoBtn.Parent = main
+Instance.new("UICorner", autoBtn).CornerRadius = UDim.new(0,10)
 
-local autoButton = Instance.new("TextButton")
-autoButton.Size = UDim2.new(0, 140, 0, 40)
-autoButton.Position = UDim2.new(1, -150, 0, 45)
-autoButton.Text = "AUTO: OFF"
-autoButton.Font = Enum.Font.GothamBold
-autoButton.TextScaled = true
-autoButton.TextColor3 = Color3.new(1,1,1)
-autoButton.BackgroundColor3 = Color3.fromRGB(40,120,40)
-autoButton.Parent = main
-Instance.new("UICorner", autoButton).CornerRadius = UDim.new(0,10)
-
-autoButton.MouseButton1Click:Connect(function()
+autoBtn.MouseButton1Click:Connect(function()
 	autoEnabled = not autoEnabled
-	autoButton.Text = autoEnabled and "AUTO: ON" or "AUTO: OFF"
-	autoButton.BackgroundColor3 =
-		autoEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(40,120,40)
+	autoBtn.Text = autoEnabled and "AUTO: ON" or "AUTO: OFF"
+	autoBtn.BackgroundColor3 = autoEnabled
+		and Color3.fromRGB(0,170,0)
+		or Color3.fromRGB(40,120,40)
 end)
 
--------------------------------------------------------------
--- SCROLL LIST
--------------------------------------------------------------
-
+-- Scroll
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 1, -110)
-scroll.Position = UDim2.new(0, 10, 0, 95)
+scroll.Size = UDim2.new(1,-20,1,-110)
+scroll.Position = UDim2.new(0,10,0,95)
 scroll.BackgroundColor3 = Color3.fromRGB(45,45,45)
 scroll.ScrollBarThickness = 6
-scroll.Parent = main
 scroll.BorderSizePixel = 0
+scroll.Parent = main
 Instance.new("UICorner", scroll).CornerRadius = UDim.new(0,10)
 
 local layout = Instance.new("UIListLayout")
 layout.Padding = UDim.new(0,8)
 layout.Parent = scroll
 
--------------------------------------------------------------
--- UI BUILDING
--------------------------------------------------------------
+-------------------------------------------------
+-- UI BUILD
+-------------------------------------------------
 
-local function clearUI()
+local function rebuildUI()
 	for _, f in pairs(entries) do
 		f:Destroy()
 	end
 	entries = {}
-end
 
-local function rebuildUI()
-	clearUI()
+	local list = {}
 
-	local objs = {}
-
-	for _, item in ipairs(TARGET_FOLDER:GetChildren()) do
-		if item.Name == "CriminalATM" then
-			table.insert(objs, item)
-			lastVisit[item] = lastVisit[item] or 0
+	for _, obj in ipairs(ATM_FOLDER:GetChildren()) do
+		if obj.Name == "CriminalATM" then
+			lastVisit[obj] = lastVisit[obj] or 0
+			table.insert(list, obj)
 		end
 	end
 
-	-- sort by oldest visit
-	table.sort(objs, function(a,b)
+	table.sort(list, function(a,b)
 		return lastVisit[a] < lastVisit[b]
 	end)
 
-	for _, item in ipairs(objs) do
-		local frame = Instance.new("Frame")
-		frame.Size = UDim2.new(1,0,0,46)
-		frame.BackgroundColor3 = Color3.fromRGB(60,60,60)
-		frame.Parent = scroll
-		Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
+	for _, obj in ipairs(list) do
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1,0,0,46)
+		row.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		row.Parent = scroll
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0,10)
 
 		local label = Instance.new("TextLabel")
 		label.Size = UDim2.new(0.6,0,1,0)
 		label.BackgroundTransparency = 1
-		label.Text = item.Name
+		label.Text = "CriminalATM"
 		label.Font = Enum.Font.Gotham
 		label.TextScaled = true
 		label.TextColor3 = Color3.new(1,1,1)
-		label.Parent = frame
+		label.Parent = row
 
 		local tp = Instance.new("TextButton")
 		tp.Size = UDim2.new(0.3,0,0.8,0)
@@ -221,78 +210,67 @@ local function rebuildUI()
 		tp.TextScaled = true
 		tp.TextColor3 = Color3.new(1,1,1)
 		tp.BackgroundColor3 = Color3.fromRGB(0,120,255)
-		tp.Parent = frame
+		tp.Parent = row
 		Instance.new("UICorner", tp).CornerRadius = UDim.new(0,10)
 
 		tp.MouseButton1Click:Connect(function()
-			local pos = getPosition(item)
+			local pos = getAnyPosition(obj)
 			if pos then
 				root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
 			end
 		end)
 
-		entries[item] = frame
+		entries[obj] = row
 	end
 
 	scroll.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 20)
 end
 
--------------------------------------------------------------
+-------------------------------------------------
 -- RANGE TRACKER
--------------------------------------------------------------
+-------------------------------------------------
 
 task.spawn(function()
 	while true do
-		for _, item in ipairs(TARGET_FOLDER:GetChildren()) do
-			if item.Name == "CriminalATM" then
-				local pos = getPosition(item)
+		for _, obj in ipairs(ATM_FOLDER:GetChildren()) do
+			if obj.Name == "CriminalATM" then
+				local pos = getAnyPosition(obj)
 				if pos then
 					local p = root.Position
-
-					local inside =
-						math.abs(p.X - pos.X) <= RANGE and
-						math.abs(p.Y - pos.Y) <= RANGE and
-						math.abs(p.Z - pos.Z) <= RANGE
-
-					if inside then
-						lastVisit[item] = os.clock()
+					if math.abs(p.X-pos.X)<=RANGE
+					and math.abs(p.Y-pos.Y)<=RANGE
+					and math.abs(p.Z-pos.Z)<=RANGE then
+						lastVisit[obj] = os.clock()
 					end
 				end
 			end
 		end
-
 		rebuildUI()
 		task.wait(0.25)
 	end
 end)
 
--------------------------------------------------------------
--- AUTO LOOP (23 sec)
--------------------------------------------------------------
+-------------------------------------------------
+-- AUTO LOOP
+-------------------------------------------------
 
 task.spawn(function()
 	while true do
 		if autoEnabled then
 			local oldest, time = nil, math.huge
-
 			for obj, t in pairs(lastVisit) do
-				if obj.Parent then
-					if t < time then
-						oldest = obj
-						time = t
-					end
+				if obj.Parent and t < time then
+					oldest, time = obj, t
 				end
 			end
-
 			if oldest then
-				local pos = getPosition(oldest)
+				local pos = getAnyPosition(oldest)
 				if pos then
 					root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
 				end
 			end
 		end
-
-		task.wait(23)
+		task.wait(AUTO_DELAY)
 	end
 end)
 
