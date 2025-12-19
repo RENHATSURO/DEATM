@@ -19,8 +19,8 @@ local root = character:WaitForChild("HumanoidRootPart")
 local TARGET_NAME = "PresentSpawner"
 local REQUIRED_CHILD = "PresentSpawnerPad"
 
-local RANGE = 15
-local AUTO_DELAY = 20
+local RANGE = 150
+local AUTO_DELAY = 0.3
 
 -------------------------------------------------
 -- DATA
