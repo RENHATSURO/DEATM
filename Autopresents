@@ -1,9 +1,10 @@
 -------------------------------------------------
--- PresentSpawner Beep-like Teleporter (FILTRÉ)
+-- PresentSpawner Teleporter (AUTO FIX + MODE)
 -------------------------------------------------
 
 -- Services
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
 
 -- Player
@@ -18,50 +19,81 @@ local root = character:WaitForChild("HumanoidRootPart")
 local TARGET_NAME = "PresentSpawner"
 local REQUIRED_CHILD = "PresentSpawnerPad"
 
-local RANGE = 15        -- cube 30x30x30
-local AUTO_DELAY = 20   -- secondes entre TP auto
+local RANGE = 15
+local AUTO_DELAY = 20
 
 -------------------------------------------------
 -- DATA
 -------------------------------------------------
 
-local lastVisit = {}    -- [Model] = timestamp
+local lastVisit = {} -- [Model] = time
 local autoEnabled = false
+local useTween = false
 local rows = {}
 
 -------------------------------------------------
--- UTIL : position robuste pour un Model
+-- UTIL
 -------------------------------------------------
 
 local function getModelPosition(model)
 	if model.PrimaryPart then
 		return model.PrimaryPart.Position
 	end
-
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") then
 			return d.Position
 		end
 	end
-
 	return nil
+end
+
+local function moveTo(position)
+	position += Vector3.new(0,4,0)
+
+	if useTween then
+		local tween = TweenService:Create(
+			root,
+			TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{CFrame = CFrame.new(position)}
+		)
+		tween:Play()
+	else
+		root.CFrame = CFrame.new(position)
+	end
+end
+
+-------------------------------------------------
+-- FIND ALL VALID SPAWNERS
+-------------------------------------------------
+
+local function getAllSpawners()
+	local list = {}
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model")
+		and obj.Name == TARGET_NAME
+		and obj:FindFirstChild(REQUIRED_CHILD) then
+
+			lastVisit[obj] = lastVisit[obj] or 0
+			table.insert(list, obj)
+		end
+	end
+
+	return list
 end
 
 -------------------------------------------------
 -- GUI
 -------------------------------------------------
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "PresentSpawner_GUI"
+local gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
 
-local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 360, 0, 460)
-main.Position = UDim2.new(0, 40, 0.5, -230)
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0,360,0,480)
+main.Position = UDim2.new(0,40,0.5,-240)
 main.BackgroundColor3 = Color3.fromRGB(35,35,35)
 main.BorderSizePixel = 0
-main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
 
 -------------------------------------------------
@@ -78,184 +110,67 @@ main.InputBegan:Connect(function(i)
 	end
 end)
 
-main.InputEnded:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = false
-	end
-end)
-
 UIS.InputChanged:Connect(function(i)
 	if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-		local delta = i.Position - dragStart
-		main.Position = UDim2.new(
-			startPos.X.Scale, startPos.X.Offset + delta.X,
-			startPos.Y.Scale, startPos.Y.Offset + delta.Y
-		)
+		local d = i.Position - dragStart
+		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+								  startPos.Y.Scale, startPos.Y.Offset + d.Y)
 	end
 end)
 
 -------------------------------------------------
--- TITLE
+-- BUTTONS
 -------------------------------------------------
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,0,0,40)
-title.BackgroundTransparency = 1
-title.Text = "Present Spawner Tracker"
-title.Font = Enum.Font.GothamBold
-title.TextScaled = true
-title.TextColor3 = Color3.new(1,1,1)
-title.Parent = main
+local function makeButton(text, y)
+	local b = Instance.new("TextButton", main)
+	b.Size = UDim2.new(0.4,0,0,36)
+	b.Position = UDim2.new(0.05,0,0,y)
+	b.Text = text
+	b.Font = Enum.Font.GothamBold
+	b.TextScaled = true
+	b.TextColor3 = Color3.new(1,1,1)
+	b.BackgroundColor3 = Color3.fromRGB(70,70,70)
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+	return b
+end
 
--------------------------------------------------
--- AUTO BUTTON
--------------------------------------------------
-
-local autoBtn = Instance.new("TextButton")
-autoBtn.Size = UDim2.new(0,140,0,40)
-autoBtn.Position = UDim2.new(0.5,-70,0,45)
-autoBtn.Text = "AUTO: OFF"
-autoBtn.Font = Enum.Font.GothamBold
-autoBtn.TextScaled = true
-autoBtn.TextColor3 = Color3.new(1,1,1)
-autoBtn.BackgroundColor3 = Color3.fromRGB(80,80,80)
-autoBtn.Parent = main
-Instance.new("UICorner", autoBtn).CornerRadius = UDim.new(0,10)
+local autoBtn = makeButton("AUTO : OFF", 50)
+local modeBtn = makeButton("MODE : TP", 95)
 
 autoBtn.MouseButton1Click:Connect(function()
 	autoEnabled = not autoEnabled
-	autoBtn.Text = autoEnabled and "AUTO: ON" or "AUTO: OFF"
-	autoBtn.BackgroundColor3 = autoEnabled
-		and Color3.fromRGB(0,170,0)
-		or Color3.fromRGB(80,80,80)
+	autoBtn.Text = autoEnabled and "AUTO : ON" or "AUTO : OFF"
+	autoBtn.BackgroundColor3 = autoEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(70,70,70)
+end)
+
+modeBtn.MouseButton1Click:Connect(function()
+	useTween = not useTween
+	modeBtn.Text = useTween and "MODE : TWEEN" or "MODE : TP"
 end)
 
 -------------------------------------------------
--- LIST
--------------------------------------------------
-
-local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1,-20,1,-100)
-scroll.Position = UDim2.new(0,10,0,95)
-scroll.CanvasSize = UDim2.new(0,0,0,0)
-scroll.ScrollBarThickness = 6
-scroll.BackgroundColor3 = Color3.fromRGB(45,45,45)
-scroll.BorderSizePixel = 0
-scroll.Parent = main
-Instance.new("UICorner", scroll).CornerRadius = UDim.new(0,10)
-
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0,8)
-layout.Parent = scroll
-
--------------------------------------------------
--- BUILD LIST (AVEC FILTRE PresentSpawnerPad)
--------------------------------------------------
-
-local function rebuildList()
-	for _, r in pairs(rows) do
-		r:Destroy()
-	end
-	rows = {}
-
-	local models = {}
-
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("Model")
-		and obj.Name == TARGET_NAME
-		and obj:FindFirstChild(REQUIRED_CHILD) then
-
-			lastVisit[obj] = lastVisit[obj] or 0
-			table.insert(models, obj)
-		end
-	end
-
-	table.sort(models, function(a,b)
-		return lastVisit[a] < lastVisit[b]
-	end)
-
-	for _, model in ipairs(models) do
-		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1,0,0,46)
-		row.BackgroundColor3 = Color3.fromRGB(60,60,60)
-		row.Parent = scroll
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0,10)
-
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.new(0.6,0,1,0)
-		label.BackgroundTransparency = 1
-		label.Text = model.Name
-		label.Font = Enum.Font.Gotham
-		label.TextScaled = true
-		label.TextColor3 = Color3.new(1,1,1)
-		label.Parent = row
-
-		local tp = Instance.new("TextButton")
-		tp.Size = UDim2.new(0.3,0,0.8,0)
-		tp.Position = UDim2.new(0.65,0,0.1,0)
-		tp.Text = "TP"
-		tp.Font = Enum.Font.GothamBold
-		tp.TextScaled = true
-		tp.TextColor3 = Color3.new(1,1,1)
-		tp.BackgroundColor3 = Color3.fromRGB(0,120,255)
-		tp.Parent = row
-		Instance.new("UICorner", tp).CornerRadius = UDim.new(0,10)
-
-		tp.MouseButton1Click:Connect(function()
-			local pos = getModelPosition(model)
-			if pos then
-				root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
-			end
-		end)
-
-		rows[model] = row
-	end
-
-	scroll.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 10)
-end
-
--------------------------------------------------
--- RANGE TRACKING
--------------------------------------------------
-
-task.spawn(function()
-	while true do
-		for model, _ in pairs(lastVisit) do
-			if model.Parent then
-				local pos = getModelPosition(model)
-				if pos then
-					local p = root.Position
-					if math.abs(p.X-pos.X)<=RANGE
-					and math.abs(p.Y-pos.Y)<=RANGE
-					and math.abs(p.Z-pos.Z)<=RANGE then
-						lastVisit[model] = os.clock()
-					end
-				end
-			end
-		end
-		rebuildList()
-		task.wait(0.4)
-	end
-end)
-
--------------------------------------------------
--- AUTO LOOP
+-- AUTO LOOP (FIXED)
 -------------------------------------------------
 
 task.spawn(function()
 	while true do
 		if autoEnabled then
+			local spawners = getAllSpawners()
 			local oldest, time = nil, math.huge
-			for model, t in pairs(lastVisit) do
-				if model.Parent and t < time then
-					oldest, time = model, t
+
+			for _, model in ipairs(spawners) do
+				if lastVisit[model] < time then
+					oldest = model
+					time = lastVisit[model]
 				end
 			end
 
 			if oldest then
 				local pos = getModelPosition(oldest)
 				if pos then
-					root.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
+					moveTo(pos)
+					lastVisit[oldest] = os.clock()
 				end
 			end
 		end
@@ -263,4 +178,23 @@ task.spawn(function()
 	end
 end)
 
-rebuildList()
+-------------------------------------------------
+-- RANGE TRACKING
+-------------------------------------------------
+
+task.spawn(function()
+	while true do
+		for _, model in ipairs(getAllSpawners()) do
+			local pos = getModelPosition(model)
+			if pos then
+				local p = root.Position
+				if math.abs(p.X-pos.X)<=RANGE
+				and math.abs(p.Y-pos.Y)<=RANGE
+				and math.abs(p.Z-pos.Z)<=RANGE then
+					lastVisit[model] = os.clock()
+				end
+			end
+		end
+		task.wait(0.4)
+	end
+end)
