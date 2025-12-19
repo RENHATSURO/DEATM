@@ -1,5 +1,5 @@
 -------------------------------------------------
--- PresentSpawner Teleporter (AUTO FIX + MODE)
+-- PresentSpawner AUTO Teleporter (FULL REWRITE)
 -------------------------------------------------
 
 -- Services
@@ -19,67 +19,115 @@ local root = character:WaitForChild("HumanoidRootPart")
 local TARGET_NAME = "PresentSpawner"
 local REQUIRED_CHILD = "PresentSpawnerPad"
 
-local RANGE = 15
-local AUTO_DELAY = 0.05
+local AUTO_DELAY = 0.25 -- très rapide
+local TWEEN_TIME = 1.2
 
 -------------------------------------------------
 -- DATA
 -------------------------------------------------
 
-local lastVisit = {} -- [Model] = time
+local known = {}         -- [Model] = true
+local lastTeleport = {} -- [Model] = timestamp | nil = jamais TP
 local autoEnabled = false
 local useTween = false
-local rows = {}
 
 -------------------------------------------------
--- UTIL
+-- UTIL : position d’un model
 -------------------------------------------------
 
 local function getModelPosition(model)
 	if model.PrimaryPart then
 		return model.PrimaryPart.Position
 	end
+
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") then
 			return d.Position
 		end
 	end
+
 	return nil
 end
 
-local function moveTo(position)
-	position += Vector3.new(0,4,0)
+-------------------------------------------------
+-- MOVE
+-------------------------------------------------
+
+local function moveTo(pos)
+	pos += Vector3.new(0, 4, 0)
 
 	if useTween then
 		local tween = TweenService:Create(
 			root,
-			TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{CFrame = CFrame.new(position)}
+			TweenInfo.new(TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{CFrame = CFrame.new(pos)}
 		)
 		tween:Play()
 	else
-		root.CFrame = CFrame.new(position)
+		root.CFrame = CFrame.new(pos)
 	end
 end
 
 -------------------------------------------------
--- FIND ALL VALID SPAWNERS
+-- SCAN SPAWNERS + NOUVEAUX
 -------------------------------------------------
 
-local function getAllSpawners()
-	local list = {}
+local function scanSpawners()
+	local all = {}
+	local newOnes = {}
 
 	for _, obj in ipairs(workspace:GetDescendants()) do
 		if obj:IsA("Model")
 		and obj.Name == TARGET_NAME
 		and obj:FindFirstChild(REQUIRED_CHILD) then
 
-			lastVisit[obj] = lastVisit[obj] or 0
-			table.insert(list, obj)
+			table.insert(all, obj)
+
+			if not known[obj] then
+				known[obj] = true
+				lastTeleport[obj] = nil -- jamais TP
+				table.insert(newOnes, obj)
+			end
 		end
 	end
 
-	return list
+	return all, newOnes
+end
+
+-------------------------------------------------
+-- CHOIX DE LA PROCHAINE CIBLE
+-------------------------------------------------
+
+local function chooseTarget()
+	local all, newOnes = scanSpawners()
+
+	-- 1️⃣ nouveaux détectés
+	if #newOnes > 0 then
+		return newOnes[math.random(#newOnes)]
+	end
+
+	-- 2️⃣ jamais TP
+	local never = {}
+	for _, s in ipairs(all) do
+		if lastTeleport[s] == nil then
+			table.insert(never, s)
+		end
+	end
+
+	if #never > 0 then
+		return never[math.random(#never)]
+	end
+
+	-- 3️⃣ plus ancien TP
+	local oldest, time = nil, math.huge
+	for _, s in ipairs(all) do
+		if lastTeleport[s] and lastTeleport[s] < time then
+			oldest = s
+			time = lastTeleport[s]
+		end
+	end
+
+	return oldest
 end
 
 -------------------------------------------------
@@ -88,13 +136,14 @@ end
 
 local gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.ResetOnSpawn = false
+gui.Name = "PresentSpawner_GUI"
 
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0,360,0,480)
-main.Position = UDim2.new(0,40,0.5,-240)
+main.Size = UDim2.new(0, 300, 0, 170)
+main.Position = UDim2.new(0, 40, 0.5, -85)
 main.BackgroundColor3 = Color3.fromRGB(35,35,35)
 main.BorderSizePixel = 0
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 -------------------------------------------------
 -- DRAG
@@ -110,38 +159,53 @@ main.InputBegan:Connect(function(i)
 	end
 end)
 
+main.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
 UIS.InputChanged:Connect(function(i)
 	if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
 		local d = i.Position - dragStart
-		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
-								  startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		main.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + d.X,
+			startPos.Y.Scale, startPos.Y.Offset + d.Y
+		)
 	end
 end)
 
 -------------------------------------------------
--- BUTTONS
+-- BUTTON CREATOR
 -------------------------------------------------
 
 local function makeButton(text, y)
 	local b = Instance.new("TextButton", main)
-	b.Size = UDim2.new(0.4,0,0,36)
+	b.Size = UDim2.new(0.9,0,0,38)
 	b.Position = UDim2.new(0.05,0,0,y)
 	b.Text = text
 	b.Font = Enum.Font.GothamBold
 	b.TextScaled = true
 	b.TextColor3 = Color3.new(1,1,1)
 	b.BackgroundColor3 = Color3.fromRGB(70,70,70)
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+	b.BorderSizePixel = 0
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
 	return b
 end
 
-local autoBtn = makeButton("AUTO : OFF", 50)
-local modeBtn = makeButton("MODE : TP", 95)
+-------------------------------------------------
+-- BUTTONS
+-------------------------------------------------
+
+local autoBtn = makeButton("AUTO : OFF", 25)
+local modeBtn = makeButton("MODE : TP", 75)
 
 autoBtn.MouseButton1Click:Connect(function()
 	autoEnabled = not autoEnabled
 	autoBtn.Text = autoEnabled and "AUTO : ON" or "AUTO : OFF"
-	autoBtn.BackgroundColor3 = autoEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(70,70,70)
+	autoBtn.BackgroundColor3 = autoEnabled
+		and Color3.fromRGB(0,170,0)
+		or Color3.fromRGB(70,70,70)
 end)
 
 modeBtn.MouseButton1Click:Connect(function()
@@ -150,51 +214,21 @@ modeBtn.MouseButton1Click:Connect(function()
 end)
 
 -------------------------------------------------
--- AUTO LOOP (FIXED)
+-- AUTO LOOP FINAL
 -------------------------------------------------
 
 task.spawn(function()
 	while true do
 		if autoEnabled then
-			local spawners = getAllSpawners()
-			local oldest, time = nil, math.huge
-
-			for _, model in ipairs(spawners) do
-				if lastVisit[model] < time then
-					oldest = model
-					time = lastVisit[model]
-				end
-			end
-
-			if oldest then
-				local pos = getModelPosition(oldest)
+			local target = chooseTarget()
+			if target then
+				local pos = getModelPosition(target)
 				if pos then
 					moveTo(pos)
-					lastVisit[oldest] = os.clock()
+					lastTeleport[target] = os.clock() -- MARQUÉ IMMÉDIATEMENT
 				end
 			end
 		end
 		task.wait(AUTO_DELAY)
-	end
-end)
-
--------------------------------------------------
--- RANGE TRACKING
--------------------------------------------------
-
-task.spawn(function()
-	while true do
-		for _, model in ipairs(getAllSpawners()) do
-			local pos = getModelPosition(model)
-			if pos then
-				local p = root.Position
-				if math.abs(p.X-pos.X)<=RANGE
-				and math.abs(p.Y-pos.Y)<=RANGE
-				and math.abs(p.Z-pos.Z)<=RANGE then
-					lastVisit[model] = os.clock()
-				end
-			end
-		end
-		task.wait(0.4)
 	end
 end)
