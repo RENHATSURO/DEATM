@@ -1,5 +1,5 @@
 -------------------------------------------------
--- PresentSpawner Beep-like Teleporter
+-- PresentSpawner Beep-like Teleporter (FILTRÉ)
 -------------------------------------------------
 
 -- Services
@@ -16,19 +16,21 @@ local root = character:WaitForChild("HumanoidRootPart")
 -------------------------------------------------
 
 local TARGET_NAME = "PresentSpawner"
-local RANGE = 15            -- cube 30x30x30
-local AUTO_DELAY = 20       -- secondes entre TP auto
+local REQUIRED_CHILD = "PresentSpawnerPad"
+
+local RANGE = 15        -- cube 30x30x30
+local AUTO_DELAY = 20   -- secondes entre TP auto
 
 -------------------------------------------------
 -- DATA
 -------------------------------------------------
 
-local lastVisit = {}        -- [Model] = timestamp
+local lastVisit = {}    -- [Model] = timestamp
 local autoEnabled = false
 local rows = {}
 
 -------------------------------------------------
--- UTIL : trouver une position pour un Model
+-- UTIL : position robuste pour un Model
 -------------------------------------------------
 
 local function getModelPosition(model)
@@ -147,7 +149,7 @@ layout.Padding = UDim.new(0,8)
 layout.Parent = scroll
 
 -------------------------------------------------
--- BUILD LIST
+-- BUILD LIST (AVEC FILTRE PresentSpawnerPad)
 -------------------------------------------------
 
 local function rebuildList()
@@ -159,7 +161,10 @@ local function rebuildList()
 	local models = {}
 
 	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("Model") and obj.Name == TARGET_NAME then
+		if obj:IsA("Model")
+		and obj.Name == TARGET_NAME
+		and obj:FindFirstChild(REQUIRED_CHILD) then
+
 			lastVisit[obj] = lastVisit[obj] or 0
 			table.insert(models, obj)
 		end
