@@ -20,7 +20,7 @@ local TARGET_NAME = "PresentSpawner"
 local REQUIRED_CHILD = "PresentSpawnerPad"
 
 local RANGE = 15
-local AUTO_DELAY = 0.3
+local AUTO_DELAY = 0.05
 
 -------------------------------------------------
 -- DATA
